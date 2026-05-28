@@ -30,6 +30,32 @@ def create_task():
     user_id = get_jwt_identity()
     data = request.get_json() or {}
 
+    # quick helper — call this whenever something happens
+def _log(db, user_id, action, task_id=None, detail=None):
+    try:
+        db.execute(
+            'INSERT INTO activity_logs (user_id, task_id, action, detail) VALUES (?, ?, ?, ?)',
+            (user_id, task_id, action, detail),
+        )
+    except Exception:
+        pass  # logging should never crash the actual request
+
+
+@tasks_bp.route('/activity', methods=['GET'])
+@jwt_required()
+def activity_log():
+    user_id = get_jwt_identity()
+    db = get_db()
+    try:
+        # TODO: add pagination, this'll be slow for active users
+        rows = db.execute(
+            'SELECT * FROM activity_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 100',
+            (user_id,),
+        ).fetchall()
+        return jsonify([dict(r) for r in rows])
+    finally:
+        db.close()
+
     if not data.get('title'):
         return jsonify({'error': 'title is required'}), 400
 
